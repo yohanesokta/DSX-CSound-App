@@ -1,21 +1,21 @@
 {
-    "preset_name": "preset3",
     "base_path": "./soundpack/preset3/",
     "mapping": {
         "1": null,
         "2": null,
         "3": null,
-        "Q": null,
-        "W": null,
-        "E": null,
-        "A": null,
-        "S": null,
-        "D": null,
-        "Z": null,
-        "X": null,
-        "C": null,
+        "A": "Jaran Bem.wav",
         "B": null,
+        "C": "PAK.wav",
+        "D": "TLUNG.wav",
+        "E": "TO-TONG.wav",
+        "M": null,
         "N": null,
-        "M": null
-    }
+        "Q": null,
+        "S": "DTLUNG.wav",
+        "W": null,
+        "X": "Tung.wav",
+        "Z": "bem.wav"
+    },
+    "preset_name": "Simpatik"
 }

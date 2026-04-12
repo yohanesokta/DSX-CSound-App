@@ -341,6 +341,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 }
             }
 
+            // Draw Copyright
+            SetTextColor(memDC, RGB(100, 100, 100));
+            std::string copyright = "Copyright (C) 2026 Yohanes Oktanio. All rights reserved.";
+            RECT copyRect = { 20, 530, 630, 560 };
+            DrawTextA(memDC, copyright.c_str(), -1, &copyRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
             // Blit to screen
             BitBlt(hdc, 0, 0, width, height, memDC, 0, 0, SRCCOPY);
 

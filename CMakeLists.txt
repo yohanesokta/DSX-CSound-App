@@ -7,13 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # Set Windows subsystem to GUI so we don't get a command prompt behind the UI
 set(CMAKE_WIN32_EXECUTABLE True)
 
-# Fetch nlohmann/json for config parsing
-include(FetchContent)
-FetchContent_Declare(json
-    URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
-)
-FetchContent_MakeAvailable(json)
-
 # Source files
 set(SOURCES
     main.cpp
@@ -31,6 +24,9 @@ set(HEADERS
 
 add_executable(${PROJECT_NAME} WIN32 ${SOURCES} ${HEADERS})
 
+# Include local libraries folder for json.hpp
+target_include_directories(${PROJECT_NAME} PRIVATE libs)
+
 # Link dependencies
 # XAudio2 is standard in Windows SDK
-target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json xaudio2.lib)
+target_link_libraries(${PROJECT_NAME} PRIVATE xaudio2.lib)

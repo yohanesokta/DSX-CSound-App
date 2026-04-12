@@ -5,17 +5,17 @@
         "2": "Jaran Bem.wav",
         "3": "Jaran Tung.wav",
         "A": "Jaran Tank.wav",
-        "B": null,
+        "B": "Jaran Kluntung.wav",
         "C": "Jaran Jidor.wav",
         "D": "Jaran Bem.wav",
-        "E": null,
+        "E": "Jaran Ncess.wav",
         "M": null,
         "N": null,
-        "Q": "Jaran Dut.wav",
+        "Q": null,
         "S": "Jaran Dut.wav",
         "W": null,
         "X": "Jaran Plank.wav",
         "Z": "Jaran Tung.wav"
     },
-    "preset_name": "preset2"
+    "preset_name": "Jandhut"
 }
