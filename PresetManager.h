@@ -6,8 +6,10 @@
 #include "AudioEngine.h"
 
 struct PresetInfo {
+    std::string folderName;
     std::string presetName;
     std::string basePath;
+    bool isCorrupt = false;
     std::unordered_map<std::string, std::string> mapping;
 };
 
@@ -20,11 +22,16 @@ public:
     
     int GetCurrentPresetIndex() const { return currentPresetIndex; }
     int GetPresetCount() const { return (int)presets.size(); }
+    const std::vector<PresetInfo>& GetPresets() const { return presets; }
     const std::string& GetCurrentPresetName() const;
     const std::string& GetCurrentPresetBasePath() const;
     bool IsCurrentPresetEdited() const;
     void SetCurrentPresetEdited(bool edited);
     void SaveCurrentPreset();
+    
+    void MoveLayerUp(int index);
+    void MoveLayerDown(int index);
+    void SaveLayerConf(const std::string& rootPath);
     
     // Convert pad character (like "1", "Q", "A") to sound ID if available
     std::string GetSoundIdForLogicalKey(const std::string& logicalKey) const;

@@ -98,8 +98,37 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             
             // Check if Save button was clicked
             if (g_PresetManager.IsCurrentPresetEdited()) {
-                if (xPos >= 300 && xPos <= 370 && yPos >= 20 && yPos <= 45) {
+                if (xPos >= 300 && xPos <= 370 && yPos >= 15 && yPos <= 40) {
                     g_PresetManager.SaveCurrentPreset();
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    return 0;
+                }
+            }
+
+            // Check Layer List clicks
+            int layerStartX = 390;
+            int layerWidth = 220;
+            int layerItemHeight = 40;
+            int layerStartY = 60;
+            const auto& presets = g_PresetManager.GetPresets();
+
+            for (int i = 0; i < presets.size(); ++i) {
+                int y = layerStartY + i * layerItemHeight;
+                if (xPos >= layerStartX && xPos <= layerStartX + layerWidth && yPos >= y && yPos <= y + layerItemHeight) {
+                    // Check UP arrow [^] (e.g. width=20, offset=170)
+                    if (xPos >= layerStartX + 170 && xPos <= layerStartX + 190) {
+                        g_PresetManager.MoveLayerUp(i);
+                        g_PresetManager.SaveLayerConf("./soundpack");
+                    }
+                    // Check DOWN arrow [v] (e.g. width=20, offset=195)
+                    else if (xPos >= layerStartX + 195 && xPos <= layerStartX + 215) {
+                        g_PresetManager.MoveLayerDown(i);
+                        g_PresetManager.SaveLayerConf("./soundpack");
+                    }
+                    // Otherwise load the preset
+                    else if (!presets[i].isCorrupt) {
+                        g_PresetManager.LoadPreset(i, g_AudioEngine);
+                    }
                     InvalidateRect(hwnd, NULL, FALSE);
                     return 0;
                 }
@@ -108,7 +137,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             int padWidth = 100; // slightly wider to fit filename
             int padHeight = 80;
             int startX = 20;
-            int startY = 80;
+            int startY = 70;
             int padding = 10;
             
             for (int r = 0; r < 5; ++r) {
@@ -194,7 +223,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
             // Draw Save Button if edited
             if (g_PresetManager.IsCurrentPresetEdited()) {
-                RECT btnRect = { 300, 20, 370, 45 };
+                RECT btnRect = { 300, 15, 370, 40 };
                 HBRUSH btnBrush = CreateSolidBrush(RGB(0, 120, 215)); // Blue save button
                 FillRect(memDC, &btnRect, btnBrush);
                 DeleteObject(btnBrush);
@@ -202,6 +231,57 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 SetTextColor(memDC, RGB(255, 255, 255));
                 std::string btnText = "SAVE";
                 DrawTextA(memDC, btnText.c_str(), -1, &btnRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            }
+
+            // Draw Layer Panel Header
+            SetTextColor(memDC, RGB(220, 220, 220));
+            std::string layerTitle = "--- Layers ---";
+            TextOutA(memDC, 400, 20, layerTitle.c_str(), layerTitle.length());
+
+            int layerStartX = 390;
+            int layerWidth = 220;
+            int layerItemHeight = 40;
+            int layerStartY = 60;
+            const auto& presets = g_PresetManager.GetPresets();
+
+            for (int i = 0; i < presets.size(); ++i) {
+                int y = layerStartY + i * layerItemHeight;
+                RECT itemRect = { layerStartX, y, layerStartX + layerWidth, y + layerItemHeight - 4 };
+                
+                // Highlight active layer
+                bool isActive = (i == g_PresetManager.GetCurrentPresetIndex());
+                HBRUSH itemBrush = CreateSolidBrush(isActive ? RGB(80, 80, 100) : RGB(40, 40, 40));
+                FillRect(memDC, &itemRect, itemBrush);
+                DeleteObject(itemBrush);
+                
+                // Name
+                std::string nameText = presets[i].folderName;
+                if (!presets[i].presetName.empty() && presets[i].presetName != presets[i].folderName) {
+                    nameText += " (" + presets[i].presetName + ")";
+                }
+
+                RECT textRect = itemRect;
+                textRect.left += 5;
+                if (presets[i].isCorrupt) {
+                    SetTextColor(memDC, RGB(255, 100, 100)); // Red text if corrupt
+                    nameText += " [corrupt]";
+                } else {
+                    SetTextColor(memDC, isActive ? RGB(255, 255, 255) : RGB(180, 180, 180));
+                }
+                DrawTextA(memDC, nameText.c_str(), -1, &textRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+                // Up Button
+                RECT upBtn = { layerStartX + 170, y, layerStartX + 190, y + layerItemHeight - 4 };
+                HBRUSH btnBrush = CreateSolidBrush(RGB(60, 60, 60));
+                FillRect(memDC, &upBtn, btnBrush);
+                SetTextColor(memDC, RGB(200, 200, 200));
+                DrawTextA(memDC, "^", -1, &upBtn, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                
+                // Down Button
+                RECT downBtn = { layerStartX + 195, y, layerStartX + 215, y + layerItemHeight - 4 };
+                FillRect(memDC, &downBtn, btnBrush);
+                DrawTextA(memDC, "v", -1, &downBtn, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                DeleteObject(btnBrush);
             }
 
             // Draw Pads
@@ -302,7 +382,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     HWND hwnd = CreateWindowEx(
         0, CLASS_NAME, "DSX Drumb",
         WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX, // disable resize
-        CW_USEDEFAULT, CW_USEDEFAULT, 400, 600,
+        CW_USEDEFAULT, CW_USEDEFAULT, 650, 600,
         NULL, NULL, hInstance, NULL
     );
 

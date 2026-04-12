@@ -10,6 +10,20 @@ PresetManager::PresetManager() {}
 
 bool PresetManager::DiscoverPresets(const std::string& rootPath) {
     presets.clear();
+    currentPresetIndex = -1;
+    
+    // 1. Read layer.conf
+    std::vector<std::string> layerOrder;
+    std::string layerConfPath = rootPath + "/layer.conf";
+    std::ifstream layerFile(layerConfPath);
+    if (layerFile.is_open()) {
+        std::string line;
+        while (std::getline(layerFile, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back(); // handle CRLF
+            if (!line.empty()) layerOrder.push_back(line);
+        }
+        layerFile.close();
+    }
     
     WIN32_FIND_DATAA findData;
     HANDLE hFind = FindFirstFileA((rootPath + "/*").c_str(), &findData);
@@ -20,7 +34,11 @@ bool PresetManager::DiscoverPresets(const std::string& rootPath) {
         if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             std::string dirName = findData.cFileName;
             if (dirName != "." && dirName != "..") {
-                std::string configPath = rootPath + "/" + dirName + "/config.json";
+                PresetInfo info;
+                info.folderName = dirName;
+                info.basePath = rootPath + "/" + dirName + "/";
+                
+                std::string configPath = info.basePath + "config.json";
                 std::ifstream configFile(configPath);
                 
                 if (configFile.is_open()) {
@@ -28,26 +46,47 @@ bool PresetManager::DiscoverPresets(const std::string& rootPath) {
                         json j;
                         configFile >> j;
                         
-                        PresetInfo info;
                         info.presetName = j["preset_name"];
-                        info.basePath = rootPath + "/" + dirName + "/";
                         
                         for (auto& element : j["mapping"].items()) {
                             if (element.value().is_string()) {
                                 info.mapping[element.key()] = element.value().get<std::string>();
                             }
                         }
-                        
-                        presets.push_back(info);
                     } catch (const std::exception& e) {
-                        std::cerr << "JSON parsing error for " << dirName << ": " << e.what() << std::endl;
+                        info.isCorrupt = true;
+                        info.presetName = dirName; // Use folder name if corrupt
                     }
+                } else {
+                    info.isCorrupt = true;
+                    info.presetName = dirName;
                 }
+                presets.push_back(info);
             }
         }
     } while (FindNextFileA(hFind, &findData));
     
     FindClose(hFind);
+    
+    // 2. Sort according to layerOrder
+    std::vector<PresetInfo> sortedPresets;
+    for (const auto& orderedName : layerOrder) {
+        for (auto it = presets.begin(); it != presets.end(); ++it) {
+            if (it->folderName == orderedName) {
+                sortedPresets.push_back(*it);
+                presets.erase(it);
+                break;
+            }
+        }
+    }
+    // Append remaining
+    for (const auto& remaining : presets) {
+        sortedPresets.push_back(remaining);
+    }
+    
+    presets = sortedPresets;
+    SaveLayerConf(rootPath);
+    
     return !presets.empty();
 }
 
@@ -149,5 +188,31 @@ void PresetManager::SaveCurrentPreset() {
             outFile << j.dump(4);
         }
         isEdited = false;
+    }
+}
+
+void PresetManager::MoveLayerUp(int index) {
+    if (index > 0 && index < presets.size()) {
+        std::swap(presets[index], presets[index - 1]);
+        if (currentPresetIndex == index) currentPresetIndex = index - 1;
+        else if (currentPresetIndex == index - 1) currentPresetIndex = index;
+    }
+}
+
+void PresetManager::MoveLayerDown(int index) {
+    if (index >= 0 && index < presets.size() - 1) {
+        std::swap(presets[index], presets[index + 1]);
+        if (currentPresetIndex == index) currentPresetIndex = index + 1;
+        else if (currentPresetIndex == index + 1) currentPresetIndex = index;
+    }
+}
+
+void PresetManager::SaveLayerConf(const std::string& rootPath) {
+    std::string layerConfPath = rootPath + "/layer.conf";
+    std::ofstream outFile(layerConfPath);
+    if (outFile.is_open()) {
+        for (const auto& preset : presets) {
+            outFile << preset.folderName << "\n";
+        }
     }
 }
