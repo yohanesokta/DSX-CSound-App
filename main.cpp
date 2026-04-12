@@ -1,4 +1,6 @@
 #include <windows.h>
+#include <windowsx.h>
+#include <commdlg.h>
 #include <string>
 #include <vector>
 #include "AudioEngine.h"
@@ -46,6 +48,37 @@ const std::vector<std::vector<std::string>> PadLayout = {
     {"B", "N", "M"}
 };
 
+void PromptWavSelection(HWND hwnd, const std::string& logicKey) {
+    char filename[MAX_PATH];
+    filename[0] = '\0';
+
+    OPENFILENAMEA ofn;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFilter = "WAV Files\0*.wav\0All Files\0*.*\0";
+    ofn.lpstrFile = filename;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+    ofn.lpstrDefExt = "wav";
+
+    std::string presetPath = g_PresetManager.GetCurrentPresetBasePath();
+    char fullPath[MAX_PATH];
+    if (GetFullPathNameA(presetPath.c_str(), MAX_PATH, fullPath, NULL)) {
+        ofn.lpstrInitialDir = fullPath;
+    }
+
+    if (GetOpenFileNameA(&ofn)) {
+        std::string selectedPath = ofn.lpstrFile;
+        size_t pos = selectedPath.find_last_of("\\/");
+        if (pos != std::string::npos) {
+            std::string justFile = selectedPath.substr(pos + 1);
+            g_PresetManager.UpdateMapping(logicKey, justFile, g_AudioEngine);
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+    }
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_CREATE:
@@ -55,6 +88,36 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         case WM_TIMER:
             InvalidateRect(hwnd, NULL, FALSE);
             return 0;
+
+        case WM_ERASEBKGND:
+            return 1; // Handled by WM_PAINT's double buffering
+
+        case WM_LBUTTONDOWN: {
+            int xPos = GET_X_LPARAM(lParam); 
+            int yPos = GET_Y_LPARAM(lParam); 
+            
+            int padWidth = 80;
+            int padHeight = 80;
+            int startX = 20;
+            int startY = 80;
+            int padding = 10;
+            
+            for (int r = 0; r < 5; ++r) {
+                for (int c = 0; c < 3; ++c) {
+                    int x = startX + c * (padWidth + padding);
+                    int y = startY + r * (padHeight + padding);
+                    
+                    if (xPos >= x && xPos <= x + padWidth && 
+                        yPos >= y && yPos <= y + padHeight) {
+                        
+                        std::string logicKey = PadLayout[r][c];
+                        PromptWavSelection(hwnd, logicKey);
+                        break;
+                    }
+                }
+            }
+            return 0;
+        }
 
         case WM_KEYDOWN: {
             bool wasDown = ((lParam & (1 << 30)) != 0); // avoid spamming if held
@@ -96,20 +159,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
             RECT clientRect;
             GetClientRect(hwnd, &clientRect);
-            
+            int width = clientRect.right - clientRect.left;
+            int height = clientRect.bottom - clientRect.top;
+
+            HDC memDC = CreateCompatibleDC(hdc);
+            HBITMAP memBitmap = CreateCompatibleBitmap(hdc, width, height);
+            HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
+
             // Draw background
             HBRUSH bgBrush = CreateSolidBrush(RGB(30, 30, 30));
-            FillRect(hdc, &clientRect, bgBrush);
+            FillRect(memDC, &clientRect, bgBrush);
             DeleteObject(bgBrush);
 
             // Draw Title
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, RGB(255, 255, 255));
+            SetBkMode(memDC, TRANSPARENT);
+            SetTextColor(memDC, RGB(255, 255, 255));
             std::string title = "DSX Drumb - " + g_PresetManager.GetCurrentPresetName();
-            TextOutA(hdc, 20, 20, title.c_str(), title.length());
+            TextOutA(memDC, 20, 20, title.c_str(), title.length());
             
-            std::string subtitle = "Up/Down arrows to change preset";
-            TextOutA(hdc, 20, 45, subtitle.c_str(), subtitle.length());
+            std::string subtitle = "Up/Down arrows to change preset. Click pad to change sound.";
+            TextOutA(memDC, 20, 45, subtitle.c_str(), subtitle.length());
 
             // Draw Pads
             int padWidth = 80;
@@ -137,14 +206,21 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     }
                     
                     HBRUSH pBrush = CreateSolidBrush(RGB(50 + intensity/2, 50 + intensity, 50 + intensity/2));
-                    FillRect(hdc, &padRect, pBrush);
+                    FillRect(memDC, &padRect, pBrush);
                     DeleteObject(pBrush);
                     
                     // Draw Key Name
-                    SetTextColor(hdc, RGB(200, 200, 200));
-                    DrawTextA(hdc, key.c_str(), -1, &padRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    SetTextColor(memDC, RGB(200, 200, 200));
+                    DrawTextA(memDC, key.c_str(), -1, &padRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
                 }
             }
+
+            // Blit to screen
+            BitBlt(hdc, 0, 0, width, height, memDC, 0, 0, SRCCOPY);
+
+            SelectObject(memDC, oldBitmap);
+            DeleteObject(memBitmap);
+            DeleteDC(memDC);
 
             EndPaint(hwnd, &ps);
             return 0;

@@ -33,12 +33,14 @@ bool PresetManager::DiscoverPresets(const std::string& rootPath) {
                         info.basePath = rootPath + "/" + dirName + "/";
                         
                         for (auto& element : j["mapping"].items()) {
-                            info.mapping[element.key()] = element.value();
+                            if (element.value().is_string()) {
+                                info.mapping[element.key()] = element.value().get<std::string>();
+                            }
                         }
                         
                         presets.push_back(info);
-                    } catch (...) {
-                        // JSON parsing failed, skip
+                    } catch (const std::exception& e) {
+                        std::cerr << "JSON parsing error for " << dirName << ": " << e.what() << std::endl;
                     }
                 }
             }
@@ -80,4 +82,41 @@ std::string PresetManager::GetSoundIdForLogicalKey(const std::string& logicalKey
         }
     }
     return "";
+}
+
+const std::string& PresetManager::GetCurrentPresetBasePath() const {
+    static std::string empty = "";
+    if (currentPresetIndex >= 0 && currentPresetIndex < presets.size()) {
+        return presets[currentPresetIndex].basePath;
+    }
+    return empty;
+}
+
+void PresetManager::UpdateMapping(const std::string& logicalKey, const std::string& wavFileName, AudioEngine& audioEngine) {
+    if (currentPresetIndex >= 0 && currentPresetIndex < presets.size()) {
+        auto& preset = presets[currentPresetIndex];
+        preset.mapping[logicalKey] = wavFileName;
+        
+        std::string wavPath = preset.basePath + wavFileName;
+        audioEngine.LoadSound(logicalKey, wavPath);
+        
+        // Save to config.json
+        std::string configPath = preset.basePath + "config.json";
+        std::ifstream inFile(configPath);
+        json j;
+        if (inFile.is_open()) {
+            inFile >> j;
+            inFile.close();
+            j["mapping"][logicalKey] = wavFileName;
+        } else {
+            j["preset_name"] = preset.presetName;
+            j["base_path"] = preset.basePath;
+            j["mapping"][logicalKey] = wavFileName;
+        }
+        
+        std::ofstream outFile(configPath);
+        if (outFile.is_open()) {
+            outFile << j.dump(4);
+        }
+    }
 }

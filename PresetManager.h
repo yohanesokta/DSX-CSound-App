@@ -21,9 +21,12 @@ public:
     int GetCurrentPresetIndex() const { return currentPresetIndex; }
     int GetPresetCount() const { return (int)presets.size(); }
     const std::string& GetCurrentPresetName() const;
+    const std::string& GetCurrentPresetBasePath() const;
     
     // Convert pad character (like "1", "Q", "A") to sound ID if available
     std::string GetSoundIdForLogicalKey(const std::string& logicalKey) const;
+
+    void UpdateMapping(const std::string& logicalKey, const std::string& wavFileName, AudioEngine& audioEngine);
 
 private:
     std::vector<PresetInfo> presets;
