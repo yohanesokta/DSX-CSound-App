@@ -1,21 +1,21 @@
 {
-    "preset_name": "preset2",
     "base_path": "./soundpack/preset2/",
     "mapping": {
-        "1": "Jaran Bem.wav",
-        "2": null,
-        "3": null,
-        "Q": "Jaran Dut.wav",
-        "W": null,
-        "E": null,
+        "1": "Jaran Tung.wav",
+        "2": "Jaran Bem.wav",
+        "3": "Jaran Tung.wav",
         "A": "Jaran Tank.wav",
-        "S": "Jaran Dut.wav",
-        "D": "Jaran Bem.wav",
-        "Z": "Jaran Tung.wav",
-        "X": "Jaran Plank.wav",
-        "C": "Jaran Jidor.wav",
         "B": null,
+        "C": "Jaran Jidor.wav",
+        "D": "Jaran Bem.wav",
+        "E": null,
+        "M": null,
         "N": null,
-        "M": null
-    }
+        "Q": "Jaran Dut.wav",
+        "S": "Jaran Dut.wav",
+        "W": null,
+        "X": "Jaran Plank.wav",
+        "Z": "Jaran Tung.wav"
+    },
+    "preset_name": "preset2"
 }

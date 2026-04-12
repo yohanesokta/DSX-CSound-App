@@ -56,6 +56,7 @@ bool PresetManager::LoadPreset(int index, AudioEngine& audioEngine) {
     
     audioEngine.UnloadAll();
     currentPresetIndex = index;
+    isEdited = false;
     const auto& preset = presets[index];
     
     for (const auto& pair : preset.mapping) {
@@ -77,8 +78,18 @@ const std::string& PresetManager::GetCurrentPresetName() const {
 std::string PresetManager::GetSoundIdForLogicalKey(const std::string& logicalKey) const {
     if (currentPresetIndex >= 0 && currentPresetIndex < presets.size()) {
         const auto& mapping = presets[currentPresetIndex].mapping;
-        if (mapping.find(logicalKey) != mapping.end()) {
+        if (mapping.find(logicalKey) != mapping.end() && !mapping.at(logicalKey).empty()) {
             return logicalKey; // sound id was registered using the logical key
+        }
+    }
+    return "";
+}
+
+std::string PresetManager::GetFileNameForLogicalKey(const std::string& logicalKey) const {
+    if (currentPresetIndex >= 0 && currentPresetIndex < presets.size()) {
+        const auto& mapping = presets[currentPresetIndex].mapping;
+        if (mapping.find(logicalKey) != mapping.end()) {
+            return mapping.at(logicalKey);
         }
     }
     return "";
@@ -92,6 +103,14 @@ const std::string& PresetManager::GetCurrentPresetBasePath() const {
     return empty;
 }
 
+bool PresetManager::IsCurrentPresetEdited() const {
+    return isEdited;
+}
+
+void PresetManager::SetCurrentPresetEdited(bool edited) {
+    isEdited = edited;
+}
+
 void PresetManager::UpdateMapping(const std::string& logicalKey, const std::string& wavFileName, AudioEngine& audioEngine) {
     if (currentPresetIndex >= 0 && currentPresetIndex < presets.size()) {
         auto& preset = presets[currentPresetIndex];
@@ -100,23 +119,35 @@ void PresetManager::UpdateMapping(const std::string& logicalKey, const std::stri
         std::string wavPath = preset.basePath + wavFileName;
         audioEngine.LoadSound(logicalKey, wavPath);
         
-        // Save to config.json
+        isEdited = true;
+    }
+}
+
+void PresetManager::SaveCurrentPreset() {
+    if (currentPresetIndex >= 0 && currentPresetIndex < presets.size() && isEdited) {
+        auto& preset = presets[currentPresetIndex];
         std::string configPath = preset.basePath + "config.json";
+        
         std::ifstream inFile(configPath);
         json j;
         if (inFile.is_open()) {
             inFile >> j;
             inFile.close();
-            j["mapping"][logicalKey] = wavFileName;
+            for (const auto& pair : preset.mapping) {
+                j["mapping"][pair.first] = pair.second;
+            }
         } else {
             j["preset_name"] = preset.presetName;
             j["base_path"] = preset.basePath;
-            j["mapping"][logicalKey] = wavFileName;
+            for (const auto& pair : preset.mapping) {
+                j["mapping"][pair.first] = pair.second;
+            }
         }
         
         std::ofstream outFile(configPath);
         if (outFile.is_open()) {
             outFile << j.dump(4);
         }
+        isEdited = false;
     }
 }

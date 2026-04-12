@@ -59,7 +59,7 @@ void PromptWavSelection(HWND hwnd, const std::string& logicKey) {
     ofn.lpstrFilter = "WAV Files\0*.wav\0All Files\0*.*\0";
     ofn.lpstrFile = filename;
     ofn.nMaxFile = MAX_PATH;
-    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR;
     ofn.lpstrDefExt = "wav";
 
     std::string presetPath = g_PresetManager.GetCurrentPresetBasePath();
@@ -96,7 +96,16 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             int xPos = GET_X_LPARAM(lParam); 
             int yPos = GET_Y_LPARAM(lParam); 
             
-            int padWidth = 80;
+            // Check if Save button was clicked
+            if (g_PresetManager.IsCurrentPresetEdited()) {
+                if (xPos >= 300 && xPos <= 370 && yPos >= 20 && yPos <= 45) {
+                    g_PresetManager.SaveCurrentPreset();
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    return 0;
+                }
+            }
+
+            int padWidth = 100; // slightly wider to fit filename
             int padHeight = 80;
             int startX = 20;
             int startY = 80;
@@ -175,22 +184,39 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             SetBkMode(memDC, TRANSPARENT);
             SetTextColor(memDC, RGB(255, 255, 255));
             std::string title = "DSX Drumb - " + g_PresetManager.GetCurrentPresetName();
-            TextOutA(memDC, 20, 20, title.c_str(), title.length());
+            if (g_PresetManager.IsCurrentPresetEdited()) {
+                title += " [EDITED]";
+            }
+            TextOutA(memDC, 20, 10, title.c_str(), title.length());
             
-            std::string subtitle = "Up/Down arrows to change preset. Click pad to change sound.";
-            TextOutA(memDC, 20, 45, subtitle.c_str(), subtitle.length());
+            std::string subtitle = "Up/Down=Preset, Click Pad=Change Sound";
+            TextOutA(memDC, 20, 35, subtitle.c_str(), subtitle.length());
+
+            // Draw Save Button if edited
+            if (g_PresetManager.IsCurrentPresetEdited()) {
+                RECT btnRect = { 300, 20, 370, 45 };
+                HBRUSH btnBrush = CreateSolidBrush(RGB(0, 120, 215)); // Blue save button
+                FillRect(memDC, &btnRect, btnBrush);
+                DeleteObject(btnBrush);
+                
+                SetTextColor(memDC, RGB(255, 255, 255));
+                std::string btnText = "SAVE";
+                DrawTextA(memDC, btnText.c_str(), -1, &btnRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            }
 
             // Draw Pads
-            int padWidth = 80;
+            int padWidth = 100;
             int padHeight = 80;
             int startX = 20;
-            int startY = 80;
+            int startY = 70;
             int padding = 10;
             DWORD now = GetTickCount();
 
             for (int r = 0; r < 5; ++r) {
                 for (int c = 0; c < 3; ++c) {
                     std::string key = PadLayout[r][c];
+                    std::string fname = g_PresetManager.GetFileNameForLogicalKey(key);
+                    bool isDisabled = fname.empty();
                     
                     int x = startX + c * (padWidth + padding);
                     int y = startY + r * (padHeight + padding);
@@ -205,13 +231,33 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         }
                     }
                     
-                    HBRUSH pBrush = CreateSolidBrush(RGB(50 + intensity/2, 50 + intensity, 50 + intensity/2));
+                    HBRUSH pBrush;
+                    if (isDisabled) {
+                        pBrush = CreateSolidBrush(RGB(20, 20, 20)); // Darker disabled
+                    } else {
+                        pBrush = CreateSolidBrush(RGB(50 + intensity/2, 50 + intensity, 50 + intensity/2));
+                    }
                     FillRect(memDC, &padRect, pBrush);
                     DeleteObject(pBrush);
                     
-                    // Draw Key Name
-                    SetTextColor(memDC, RGB(200, 200, 200));
-                    DrawTextA(memDC, key.c_str(), -1, &padRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    // Draw Key Name and Filename
+                    SetTextColor(memDC, isDisabled ? RGB(100, 100, 100) : RGB(220, 220, 220));
+                    
+                    RECT upperRect = padRect;
+                    upperRect.bottom = y + padHeight / 2 + 10;
+                    DrawTextA(memDC, key.c_str(), -1, &upperRect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+                    
+                    RECT lowerRect = padRect;
+                    lowerRect.top = y + padHeight / 2 + 10;
+                    
+                    std::string truncFname = isDisabled ? "NONE" : fname;
+                    if (truncFname.length() > 12) {
+                        // Truncate long filenames
+                        truncFname = truncFname.substr(0, 10) + "..";
+                    }
+                    
+                    SetTextColor(memDC, isDisabled ? RGB(70, 70, 70) : RGB(150, 150, 150));
+                    DrawTextA(memDC, truncFname.c_str(), -1, &lowerRect, DT_CENTER | DT_TOP | DT_SINGLELINE);
                 }
             }
 
