@@ -2,20 +2,17 @@
     "preset_name": "Simpatik Jaranan",
     "base_path": "./soundpack/preset1/",
     "mapping": {
-        "1": "pads_1_a1.wav",
-        "2": "pads_1_a2.wav",
-        "3": "pads_1_a3.wav",
-        "Q": "pads_1_a4.wav",
-        "W": "pads_1_b0.wav",
-        "E": "pads_1_b1.wav",
-        "A": "pads_1_b2.wav",
-        "S": "pads_1_b3.wav",
-        "D": "pads_1_b4.wav",
-        "Z": "pads_1_c0.wav",
-        "X": "pads_1_c1.wav",
-        "C": "pads_1_c2.wav",
-        "B": "pads_1_c3.wav",
-        "N": "pads_1_c4.wav",
-        "M": "pads_1_c5.wav"
+        "Pad1": "pads_1_a1.wav",
+        "Pad2": "pads_1_a2.wav",
+        "Pad3": "pads_1_a3.wav",
+        "Pad4": "pads_1_a4.wav",
+        "Pad5": "pads_1_b0.wav",
+        "Pad6": "pads_1_b1.wav",
+        "Pad7": "pads_1_b2.wav",
+        "Pad8": "pads_1_b3.wav",
+        "Pad9": "pads_1_b4.wav",
+        "Pad10": "pads_1_c0.wav",
+        "Pad11": "pads_1_c1.wav",
+        "Pad12": "pads_1_c2.wav"
     }
 }

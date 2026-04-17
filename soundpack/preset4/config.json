@@ -2,20 +2,17 @@
     "preset_name": "preset4",
     "base_path": "./soundpack/preset4/",
     "mapping": {
-        "1": null,
-        "2": null,
-        "3": null,
-        "Q": null,
-        "W": null,
-        "E": null,
-        "A": null,
-        "S": null,
-        "D": null,
-        "Z": null,
-        "X": null,
-        "C": null,
-        "B": null,
-        "N": null,
-        "M": null
+        "Pad1": null,
+        "Pad2": null,
+        "Pad3": null,
+        "Pad4": null,
+        "Pad5": null,
+        "Pad6": null,
+        "Pad7": null,
+        "Pad8": null,
+        "Pad9": null,
+        "Pad10": null,
+        "Pad11": null,
+        "Pad12": null
     }
 }

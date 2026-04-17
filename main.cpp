@@ -14,38 +14,30 @@ const DWORD FLASH_DURATION = 150; // ms
 std::string GetLogicalKeyFromVK(WPARAM wParam) {
     switch (wParam) {
         // Row 1
-        case '1': case VK_DIVIDE: return "1";
-        case '2': case VK_MULTIPLY: return "2";
-        case '3': case VK_SUBTRACT: return "3";
+        case '5': case VK_NUMPAD5: return "Pad1";
+        case '3': return "Pad2";
+        case 'F': return "Pad3";
         // Row 2
-        case 'Q': case VK_NUMPAD7: return "Q";
-        case 'W': case VK_NUMPAD8: return "W";
-        case 'E': case VK_NUMPAD9: return "E";
+        case 'Z': return "Pad4";
+        case 'X': return "Pad5";
+        case 'C': return "Pad6";
         // Row 3
-        case 'A': case VK_NUMPAD4: return "A";
-        case 'S': case VK_NUMPAD5: return "S";
-        case 'D': case VK_NUMPAD6: return "D";
+        case '1': case VK_NUMPAD1: return "Pad7";
+        case '2': case VK_NUMPAD2: return "Pad8";
+        case 'Q': return "Pad9"; 
         // Row 4
-        case 'Z': case VK_NUMPAD1: return "Z";
-        case 'X': case VK_NUMPAD2: return "X";
-        case 'C': case VK_NUMPAD3: return "C";
-        // Row 5
-        case 'B': case VK_NUMPAD0: return "B";
-        case 'N': case VK_DECIMAL: return "N";
-        case VK_RETURN: return "M"; 
+        case 'A': return "Pad10";
+        case 'S': return "Pad11";
+        case 'W': return "Pad12";
     }
-    // M key specifically because VK_RETURN is also here
-    if (wParam == 'M') return "M";
-    
     return "";
 }
 
 const std::vector<std::vector<std::string>> PadLayout = {
-    {"1", "2", "3"},
-    {"Q", "W", "E"},
-    {"A", "S", "D"},
-    {"Z", "X", "C"},
-    {"B", "N", "M"}
+    {"Pad1", "Pad2", "Pad3"},
+    {"Pad4", "Pad5", "Pad6"},
+    {"Pad7", "Pad8", "Pad9"},
+    {"Pad10", "Pad11", "Pad12"}
 };
 
 void PromptWavSelection(HWND hwnd, const std::string& logicKey) {
@@ -140,7 +132,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             int startY = 70;
             int padding = 10;
             
-            for (int r = 0; r < 5; ++r) {
+            for (int r = 0; r < 4; ++r) {
                 for (int c = 0; c < 3; ++c) {
                     int x = startX + c * (padWidth + padding);
                     int y = startY + r * (padHeight + padding);
@@ -292,7 +284,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             int padding = 10;
             DWORD now = GetTickCount();
 
-            for (int r = 0; r < 5; ++r) {
+            for (int r = 0; r < 4; ++r) {
                 for (int c = 0; c < 3; ++c) {
                     std::string key = PadLayout[r][c];
                     std::string fname = g_PresetManager.GetFileNameForLogicalKey(key);

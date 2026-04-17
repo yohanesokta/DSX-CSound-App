@@ -1,21 +1,18 @@
 {
     "base_path": "./soundpack/preset2/",
     "mapping": {
-        "1": "Jaran Tung.wav",
-        "2": "Jaran Bem.wav",
-        "3": "Jaran Tung.wav",
-        "A": "Jaran Tank.wav",
-        "B": "Jaran Kluntung.wav",
-        "C": "Jaran Jidor.wav",
-        "D": "Jaran Bem.wav",
-        "E": "Jaran Ncess.wav",
-        "M": null,
-        "N": null,
-        "Q": null,
-        "S": "Jaran Dut.wav",
-        "W": null,
-        "X": "Jaran Plank.wav",
-        "Z": "Jaran Tung.wav"
+        "Pad1": "Jaran Tung.wav",
+        "Pad2": "Jaran Bem.wav",
+        "Pad3": "Jaran Tung.wav",
+        "Pad4": null,
+        "Pad5": null,
+        "Pad6": "Jaran Ncess.wav",
+        "Pad7": "Jaran Tank.wav",
+        "Pad8": "Jaran Dut.wav",
+        "Pad9": "Jaran Bem.wav",
+        "Pad10": "Jaran Tung.wav",
+        "Pad11": "Jaran Plank.wav",
+        "Pad12": "Jaran Jidor.wav"
     },
     "preset_name": "Jandhut"
 }
