@@ -429,8 +429,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 std::string fname = g_PresetManager.GetFileNameForLogicalKey(key);
                 bool isDisabled = fname.empty();
                 
-                RECT padRect = { pad.x, pad.y, pad.x + pad.w, pad.y + pad.h };
-                
                 bool isWaiting = (g_WaitingForKeyForPad == key);
                 
                 int intensity = 0;
@@ -441,22 +439,46 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     }
                 }
                 
+                // Shadow
+                HBRUSH shadowBrush = CreateSolidBrush(RGB(15, 15, 15));
+                HPEN shadowPen = CreatePen(PS_NULL, 0, 0);
+                HPEN oldPen = (HPEN)SelectObject(memDC, shadowPen);
+                HBRUSH oldBrush = (HBRUSH)SelectObject(memDC, shadowBrush);
+                
+                RoundRect(memDC, pad.x + 6, pad.y + 6, pad.x + pad.w + 6, pad.y + pad.h + 6, 8, 8);
+                
+                SelectObject(memDC, oldPen);
+                SelectObject(memDC, oldBrush);
+                DeleteObject(shadowPen);
+                DeleteObject(shadowBrush);
+
                 HBRUSH pBrush;
                 if (isWaiting) {
                     pBrush = CreateSolidBrush(RGB(200, 150, 0)); // Yellowish
                 } else if (isDisabled) {
-                    pBrush = CreateSolidBrush(RGB(20, 20, 20)); // Darker disabled
+                    pBrush = CreateSolidBrush(RGB(30, 30, 30)); // Darker disabled
                 } else {
                     pBrush = CreateSolidBrush(RGB(50 + intensity, 50, 50));
                 }
-                FillRect(memDC, &padRect, pBrush);
+
+                RECT drawnRect = { pad.x, pad.y, pad.x + pad.w, pad.y + pad.h };
+                
+                HPEN padPen = CreatePen(PS_SOLID, 1, RGB(70, 70, 70)); // Subtle border
+                oldPen = (HPEN)SelectObject(memDC, padPen);
+                oldBrush = (HBRUSH)SelectObject(memDC, pBrush);
+                
+                RoundRect(memDC, drawnRect.left, drawnRect.top, drawnRect.right, drawnRect.bottom, 8, 8);
+                
+                SelectObject(memDC, oldPen);
+                SelectObject(memDC, oldBrush);
+                DeleteObject(padPen);
                 DeleteObject(pBrush);
                 
                 // Draw Key Name and Filename
                 SetTextColor(memDC, isDisabled ? RGB(100, 100, 100) : (isWaiting ? RGB(255, 255, 255) : RGB(220, 220, 220)));
                 
-                RECT upperRect = padRect;
-                upperRect.bottom = pad.y + pad.h / 2 + 10;
+                RECT upperRect = drawnRect;
+                upperRect.bottom = drawnRect.top + pad.h / 2 + 10;
                 
                 if (isWaiting) {
                     DrawTextA(memDC, "PRESS KEY", -1, &upperRect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
@@ -472,14 +494,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                         mappedKeyStr = "?";
                     }
                     
-                    RECT topCenterRect = padRect;
+                    RECT topCenterRect = drawnRect;
                     topCenterRect.top += 5; // offset a bit from top
                     SetTextColor(memDC, RGB(180, 180, 180));
                     DrawTextA(memDC, mappedKeyStr.c_str(), -1, &topCenterRect, DT_CENTER | DT_TOP | DT_SINGLELINE);
                 }
                 
-                RECT lowerRect = padRect;
-                lowerRect.top = pad.y + pad.h / 2 + 10;
+                RECT lowerRect = drawnRect;
+                lowerRect.top = drawnRect.top + pad.h / 2 + 10;
                 
                 std::string truncFname = isDisabled ? "NONE" : fname;
                 if (truncFname.length() > 12) {
@@ -487,7 +509,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     truncFname = truncFname.substr(0, 10) + "..";
                 }
                 
-                SetTextColor(memDC, isDisabled ? RGB(70, 70, 70) : RGB(150, 150, 150));
+                SetTextColor(memDC, isDisabled ? RGB(80, 80, 80) : RGB(150, 150, 150));
                 DrawTextA(memDC, truncFname.c_str(), -1, &lowerRect, DT_CENTER | DT_TOP | DT_SINGLELINE);
             }
 
