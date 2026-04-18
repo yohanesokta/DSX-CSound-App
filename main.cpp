@@ -123,7 +123,6 @@ void InitPads() {
             g_Pads.push_back({logicKey, startX + c * (padWidth + padding), startY + r * (padHeight + padding), padWidth, padHeight});
         }
     }
-    // 2 extra pads at bottom right for kick bass
     g_Pads.push_back({"Pad13", 390, 440, padWidth, padHeight});
     g_Pads.push_back({"Pad14", 500, 440, padWidth, padHeight});
 }
@@ -159,14 +158,35 @@ void PromptWavSelection(HWND hwnd, const std::string& logicKey) {
     }
 }
 
+#define IDM_HELP 1001
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
-        case WM_CREATE:
+        case WM_CREATE: {
+            HMENU hMenu = CreateMenu();
+            AppendMenuA(hMenu, MF_STRING, IDM_HELP, "Help");
+            SetMenu(hwnd, hMenu);
+
             InitPads();
             LoadLayoutConf();
             SetTimer(hwnd, 1, 30, NULL); // Timer for UI repaint (flash effect fading)
             return 0;
-            
+        }
+
+        case WM_COMMAND: {
+            if (LOWORD(wParam) == IDM_HELP) {
+                const char* helpText = "Panduan Penggunaan DSX Drumb:\n\n"
+                                       "1. Klik kiri pad untuk mengatur file suara (WAV).\n"
+                                       "2. Klik kanan pad untuk mengganti tombol keyboard (bind key).\n"
+                                       "3. Tekan sembarang tombol untuk bind, atau klik kanan lagi untuk batal.\n"
+                                       "4. Panah Atas/Bawah pada keyboard untuk pindah preset layer.\n"
+                                       "5. Klik ^ atau v pada Layer list untuk memindah urutan preset.\n"
+                                       "6. Klik tombol SAVE bila ada perubahan yang telah dibuat.\n";
+                MessageBoxA(hwnd, helpText, "Help / Cara Penggunaan", MB_OK | MB_ICONINFORMATION);
+            }
+            return 0;
+        }
+
         case WM_TIMER:
             InvalidateRect(hwnd, NULL, FALSE);
             return 0;
@@ -229,6 +249,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         case WM_RBUTTONDOWN: {
             int xPos = GET_X_LPARAM(lParam); 
             int yPos = GET_Y_LPARAM(lParam); 
+            
+            // Fix: jika klik kanan ke 2 adalah cancel
+            if (!g_WaitingForKeyForPad.empty()) {
+                g_WaitingForKeyForPad = "";
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
+
             for (const auto& pad : g_Pads) {
                 if (xPos >= pad.x && xPos <= pad.x + pad.w && 
                     yPos >= pad.y && yPos <= pad.y + pad.h) {
@@ -419,7 +447,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 } else if (isDisabled) {
                     pBrush = CreateSolidBrush(RGB(20, 20, 20)); // Darker disabled
                 } else {
-                    pBrush = CreateSolidBrush(RGB(50 + intensity/2, 50 + intensity, 50 + intensity/2));
+                    pBrush = CreateSolidBrush(RGB(50 + intensity, 50, 50));
                 }
                 FillRect(memDC, &padRect, pBrush);
                 DeleteObject(pBrush);
@@ -439,9 +467,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 if (!isWaiting) {
                     std::string mappedKeyStr = "";
                     if (g_PadToKey.find(key) != g_PadToKey.end()) {
-                        mappedKeyStr = "[" + VKToStr(g_PadToKey[key]) + "]";
+                        mappedKeyStr = "" + VKToStr(g_PadToKey[key]) + "";
                     } else {
-                        mappedKeyStr = "[?]";
+                        mappedKeyStr = "?";
                     }
                     
                     RECT topCenterRect = padRect;
@@ -465,8 +493,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
             // Draw Copyright
             SetTextColor(memDC, RGB(100, 100, 100));
-            std::string copyright = "Copyright (C) 2026 Yohanes Oktanio. All rights reserved.";
-            RECT copyRect = { 20, 530, 630, 560 };
+            std::string copyright = "Copyright C 2026 Yohanes Oktanio. All rights reserved.";
+            RECT copyRect = { 20, 515, 630, 545 };
             DrawTextA(memDC, copyright.c_str(), -1, &copyRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
             // Blit to screen
