@@ -11,34 +11,122 @@ PresetManager g_PresetManager;
 std::unordered_map<std::string, DWORD> g_PadFlashTime; // tracks when a pad was hit
 const DWORD FLASH_DURATION = 150; // ms
 
-std::string GetLogicalKeyFromVK(WPARAM wParam) {
-    switch (wParam) {
-        // Row 1
-        case '5': case VK_NUMPAD5: return "Pad1";
-        case '3': return "Pad2";
-        case 'F': return "Pad3";
-        // Row 2
-        case 'Z': return "Pad4";
-        case 'X': return "Pad5";
-        case 'C': return "Pad6";
-        // Row 3
-        case '1': case VK_NUMPAD1: return "Pad7";
-        case '2': case VK_NUMPAD2: return "Pad8";
-        case 'Q': return "Pad9"; 
-        // Row 4
-        case 'A': return "Pad10";
-        case 'S': return "Pad11";
-        case 'W': return "Pad12";
+std::unordered_map<WPARAM, std::string> g_KeyToPad;
+std::unordered_map<std::string, WPARAM> g_PadToKey;
+std::string g_WaitingForKeyForPad = "";
+
+struct PadDef {
+    std::string logicKey;
+    int x, y, w, h;
+};
+std::vector<PadDef> g_Pads;
+
+std::string VKToStr(WPARAM vk) {
+    if (vk >= '0' && vk <= '9') return std::string(1, (char)vk);
+    if (vk >= 'A' && vk <= 'Z') return std::string(1, (char)vk);
+    switch(vk) {
+        case VK_SPACE: return "SPACE";
+        case VK_RETURN: return "ENTER";
+        case VK_NUMPAD0: return "NUM0"; case VK_NUMPAD1: return "NUM1";
+        case VK_NUMPAD2: return "NUM2"; case VK_NUMPAD3: return "NUM3";
+        case VK_NUMPAD4: return "NUM4"; case VK_NUMPAD5: return "NUM5";
+        case VK_NUMPAD6: return "NUM6"; case VK_NUMPAD7: return "NUM7";
+        case VK_NUMPAD8: return "NUM8"; case VK_NUMPAD9: return "NUM9";
+        case VK_DECIMAL: return "NUM."; case VK_ADD: return "NUM+";
+        case VK_SUBTRACT: return "NUM-"; case VK_MULTIPLY: return "NUM*";
+        case VK_DIVIDE: return "NUM/";
+        case VK_UP: return "UP"; case VK_DOWN: return "DOWN";
+        case VK_LEFT: return "LEFT"; case VK_RIGHT: return "RIGHT";
+        case VK_OEM_1: return ";"; case VK_OEM_PLUS: return "="; 
+        case VK_OEM_COMMA: return ","; case VK_OEM_MINUS: return "-"; 
+        case VK_OEM_PERIOD: return "."; case VK_OEM_2: return "/"; 
+        case VK_OEM_3: return "`"; case VK_OEM_4: return "["; 
+        case VK_OEM_5: return "\\"; case VK_OEM_6: return "]"; 
+        case VK_OEM_7: return "'"; 
     }
-    return "";
+    return std::to_string(vk);
 }
 
-const std::vector<std::vector<std::string>> PadLayout = {
-    {"Pad1", "Pad2", "Pad3"},
-    {"Pad4", "Pad5", "Pad6"},
-    {"Pad7", "Pad8", "Pad9"},
-    {"Pad10", "Pad11", "Pad12"}
-};
+WPARAM StrToVK(const std::string& str) {
+    if (str.length() == 1) {
+        char c = toupper(str[0]);
+        if (c >= '0' && c <= '9') return c;
+        if (c >= 'A' && c <= 'Z') return c;
+        switch(c) {
+            case ';': return VK_OEM_1; case '=': return VK_OEM_PLUS;
+            case ',': return VK_OEM_COMMA; case '-': return VK_OEM_MINUS;
+            case '.': return VK_OEM_PERIOD; case '/': return VK_OEM_2;
+            case '`': return VK_OEM_3; case '[': return VK_OEM_4;
+            case '\\': return VK_OEM_5; case ']': return VK_OEM_6;
+            case '\'': return VK_OEM_7;
+        }
+    }
+    if (str == "SPACE") return VK_SPACE;
+    if (str == "ENTER") return VK_RETURN;
+    if (str == "NUM0") return VK_NUMPAD0; if (str == "NUM1") return VK_NUMPAD1;
+    if (str == "NUM2") return VK_NUMPAD2; if (str == "NUM3") return VK_NUMPAD3;
+    if (str == "NUM4") return VK_NUMPAD4; if (str == "NUM5") return VK_NUMPAD5;
+    if (str == "NUM6") return VK_NUMPAD6; if (str == "NUM7") return VK_NUMPAD7;
+    if (str == "NUM8") return VK_NUMPAD8; if (str == "NUM9") return VK_NUMPAD9;
+    if (str == "NUM.") return VK_DECIMAL; if (str == "NUM+") return VK_ADD;
+    if (str == "NUM-") return VK_SUBTRACT; if (str == "NUM*") return VK_MULTIPLY;
+    if (str == "NUM/") return VK_DIVIDE;
+    if (str == "UP") return VK_UP; if (str == "DOWN") return VK_DOWN;
+    if (str == "LEFT") return VK_LEFT; if (str == "RIGHT") return VK_RIGHT;
+
+    try { return (WPARAM)std::stoi(str); } catch(...) {}
+    return 0;
+}
+
+void LoadLayoutConf() {
+    g_KeyToPad.clear();
+    g_PadToKey.clear();
+    char buf[256];
+    char fullPath[MAX_PATH];
+    GetFullPathNameA("./layout.conf", MAX_PATH, fullPath, NULL);
+    for (int i=1; i<=14; ++i) {
+        std::string keyName = std::to_string(i);
+        std::string padName = "Pad" + keyName;
+        GetPrivateProfileStringA("PAD", keyName.c_str(), "", buf, 256, fullPath);
+        std::string valStr = buf;
+        WPARAM vk = StrToVK(valStr);
+        if (vk != 0) {
+            g_PadToKey[padName] = vk;
+            g_KeyToPad[vk] = padName;
+        }
+    }
+}
+
+void SaveLayoutConf() {
+    char fullPath[MAX_PATH];
+    GetFullPathNameA("./layout.conf", MAX_PATH, fullPath, NULL);
+    for (int i=1; i<=14; ++i) {
+        std::string keyName = std::to_string(i);
+        std::string padName = "Pad" + keyName;
+        if (g_PadToKey.find(padName) != g_PadToKey.end()) {
+            std::string valStr = VKToStr(g_PadToKey[padName]);
+            WritePrivateProfileStringA("PAD", keyName.c_str(), valStr.c_str(), fullPath);
+        }
+    }
+}
+
+void InitPads() {
+    int padWidth = 100;
+    int padHeight = 80;
+    int startX = 20;
+    int startY = 70;
+    int padding = 10;
+    int padIdx = 1;
+    for (int r = 0; r < 4; ++r) {
+        for (int c = 0; c < 3; ++c) {
+            std::string logicKey = "Pad" + std::to_string(padIdx++);
+            g_Pads.push_back({logicKey, startX + c * (padWidth + padding), startY + r * (padHeight + padding), padWidth, padHeight});
+        }
+    }
+    // 2 extra pads at bottom right for kick bass
+    g_Pads.push_back({"Pad13", 390, 440, padWidth, padHeight});
+    g_Pads.push_back({"Pad14", 500, 440, padWidth, padHeight});
+}
 
 void PromptWavSelection(HWND hwnd, const std::string& logicKey) {
     char filename[MAX_PATH];
@@ -74,6 +162,8 @@ void PromptWavSelection(HWND hwnd, const std::string& logicKey) {
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_CREATE:
+            InitPads();
+            LoadLayoutConf();
             SetTimer(hwnd, 1, 30, NULL); // Timer for UI repaint (flash effect fading)
             return 0;
             
@@ -126,24 +216,25 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 }
             }
 
-            int padWidth = 100; // slightly wider to fit filename
-            int padHeight = 80;
-            int startX = 20;
-            int startY = 70;
-            int padding = 10;
-            
-            for (int r = 0; r < 4; ++r) {
-                for (int c = 0; c < 3; ++c) {
-                    int x = startX + c * (padWidth + padding);
-                    int y = startY + r * (padHeight + padding);
-                    
-                    if (xPos >= x && xPos <= x + padWidth && 
-                        yPos >= y && yPos <= y + padHeight) {
-                        
-                        std::string logicKey = PadLayout[r][c];
-                        PromptWavSelection(hwnd, logicKey);
-                        break;
-                    }
+            for (const auto& pad : g_Pads) {
+                if (xPos >= pad.x && xPos <= pad.x + pad.w && 
+                    yPos >= pad.y && yPos <= pad.y + pad.h) {
+                    PromptWavSelection(hwnd, pad.logicKey);
+                    break;
+                }
+            }
+            return 0;
+        }
+
+        case WM_RBUTTONDOWN: {
+            int xPos = GET_X_LPARAM(lParam); 
+            int yPos = GET_Y_LPARAM(lParam); 
+            for (const auto& pad : g_Pads) {
+                if (xPos >= pad.x && xPos <= pad.x + pad.w && 
+                    yPos >= pad.y && yPos <= pad.y + pad.h) {
+                    g_WaitingForKeyForPad = pad.logicKey;
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    break;
                 }
             }
             return 0;
@@ -153,31 +244,57 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             bool wasDown = ((lParam & (1 << 30)) != 0); // avoid spamming if held
             if (wasDown) return 0;
 
-            if (wParam == VK_UP) {
+            if (!g_WaitingForKeyForPad.empty()) {
+                if (wParam == VK_ESCAPE) {
+                    g_WaitingForKeyForPad = "";
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    return 0;
+                }
+                
+                WPARAM oldKey = g_PadToKey[g_WaitingForKeyForPad];
+                if (oldKey != 0) {
+                    g_KeyToPad.erase(oldKey);
+                }
+                
+                std::string oldPad = g_KeyToPad[wParam];
+                if (!oldPad.empty()) {
+                    g_PadToKey.erase(oldPad);
+                }
+                
+                g_PadToKey[g_WaitingForKeyForPad] = wParam;
+                g_KeyToPad[wParam] = g_WaitingForKeyForPad;
+                SaveLayoutConf();
+                
+                g_WaitingForKeyForPad = "";
+                InvalidateRect(hwnd, NULL, FALSE);
+                return 0;
+            }
+
+            std::string logicKey = "";
+            if (g_KeyToPad.find(wParam) != g_KeyToPad.end()) {
+                logicKey = g_KeyToPad[wParam];
+            }
+            
+            if (!logicKey.empty()) {
+                std::string soundId = g_PresetManager.GetSoundIdForLogicalKey(logicKey);
+                if (!soundId.empty()) {
+                    g_AudioEngine.PlaySoundById(soundId);
+                    g_PadFlashTime[logicKey] = GetTickCount(); // For GUI flash
+                    InvalidateRect(hwnd, NULL, FALSE);
+                }
+            } else if (wParam == VK_UP) {
                 int count = g_PresetManager.GetPresetCount();
                 if (count > 0) {
                     int next = (g_PresetManager.GetCurrentPresetIndex() - 1 + count) % count;
                     g_PresetManager.LoadPreset(next, g_AudioEngine);
                     InvalidateRect(hwnd, NULL, TRUE);
                 }
-            }
-            else if (wParam == VK_DOWN) {
+            } else if (wParam == VK_DOWN) {
                 int count = g_PresetManager.GetPresetCount();
                 if (count > 0) {
                     int next = (g_PresetManager.GetCurrentPresetIndex() + 1) % count;
                     g_PresetManager.LoadPreset(next, g_AudioEngine);
                     InvalidateRect(hwnd, NULL, TRUE);
-                }
-            }
-            else {
-                std::string logicKey = GetLogicalKeyFromVK(wParam);
-                if (!logicKey.empty()) {
-                    std::string soundId = g_PresetManager.GetSoundIdForLogicalKey(logicKey);
-                    if (!soundId.empty()) {
-                        g_AudioEngine.PlaySoundById(soundId);
-                        g_PadFlashTime[logicKey] = GetTickCount(); // For GUI flash
-                        InvalidateRect(hwnd, NULL, FALSE);
-                    }
                 }
             }
             return 0;
@@ -277,60 +394,73 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             }
 
             // Draw Pads
-            int padWidth = 100;
-            int padHeight = 80;
-            int startX = 20;
-            int startY = 70;
-            int padding = 10;
             DWORD now = GetTickCount();
 
-            for (int r = 0; r < 4; ++r) {
-                for (int c = 0; c < 3; ++c) {
-                    std::string key = PadLayout[r][c];
-                    std::string fname = g_PresetManager.GetFileNameForLogicalKey(key);
-                    bool isDisabled = fname.empty();
-                    
-                    int x = startX + c * (padWidth + padding);
-                    int y = startY + r * (padHeight + padding);
-                    
-                    RECT padRect = { x, y, x + padWidth, y + padHeight };
-                    
-                    int intensity = 0;
-                    if (g_PadFlashTime.find(key) != g_PadFlashTime.end()) {
-                        DWORD elapsed = now - g_PadFlashTime[key];
-                        if (elapsed < FLASH_DURATION) {
-                            intensity = 255 - (255 * elapsed / FLASH_DURATION);
-                        }
+            for (const auto& pad : g_Pads) {
+                std::string key = pad.logicKey;
+                std::string fname = g_PresetManager.GetFileNameForLogicalKey(key);
+                bool isDisabled = fname.empty();
+                
+                RECT padRect = { pad.x, pad.y, pad.x + pad.w, pad.y + pad.h };
+                
+                bool isWaiting = (g_WaitingForKeyForPad == key);
+                
+                int intensity = 0;
+                if (!isWaiting && g_PadFlashTime.find(key) != g_PadFlashTime.end()) {
+                    DWORD elapsed = now - g_PadFlashTime[key];
+                    if (elapsed < FLASH_DURATION) {
+                        intensity = 255 - (255 * elapsed / FLASH_DURATION);
                     }
-                    
-                    HBRUSH pBrush;
-                    if (isDisabled) {
-                        pBrush = CreateSolidBrush(RGB(20, 20, 20)); // Darker disabled
-                    } else {
-                        pBrush = CreateSolidBrush(RGB(50 + intensity/2, 50 + intensity, 50 + intensity/2));
-                    }
-                    FillRect(memDC, &padRect, pBrush);
-                    DeleteObject(pBrush);
-                    
-                    // Draw Key Name and Filename
-                    SetTextColor(memDC, isDisabled ? RGB(100, 100, 100) : RGB(220, 220, 220));
-                    
-                    RECT upperRect = padRect;
-                    upperRect.bottom = y + padHeight / 2 + 10;
-                    DrawTextA(memDC, key.c_str(), -1, &upperRect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
-                    
-                    RECT lowerRect = padRect;
-                    lowerRect.top = y + padHeight / 2 + 10;
-                    
-                    std::string truncFname = isDisabled ? "NONE" : fname;
-                    if (truncFname.length() > 12) {
-                        // Truncate long filenames
-                        truncFname = truncFname.substr(0, 10) + "..";
-                    }
-                    
-                    SetTextColor(memDC, isDisabled ? RGB(70, 70, 70) : RGB(150, 150, 150));
-                    DrawTextA(memDC, truncFname.c_str(), -1, &lowerRect, DT_CENTER | DT_TOP | DT_SINGLELINE);
                 }
+                
+                HBRUSH pBrush;
+                if (isWaiting) {
+                    pBrush = CreateSolidBrush(RGB(200, 150, 0)); // Yellowish
+                } else if (isDisabled) {
+                    pBrush = CreateSolidBrush(RGB(20, 20, 20)); // Darker disabled
+                } else {
+                    pBrush = CreateSolidBrush(RGB(50 + intensity/2, 50 + intensity, 50 + intensity/2));
+                }
+                FillRect(memDC, &padRect, pBrush);
+                DeleteObject(pBrush);
+                
+                // Draw Key Name and Filename
+                SetTextColor(memDC, isDisabled ? RGB(100, 100, 100) : (isWaiting ? RGB(255, 255, 255) : RGB(220, 220, 220)));
+                
+                RECT upperRect = padRect;
+                upperRect.bottom = pad.y + pad.h / 2 + 10;
+                
+                if (isWaiting) {
+                    DrawTextA(memDC, "PRESS KEY", -1, &upperRect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+                } else {
+                    DrawTextA(memDC, key.c_str(), -1, &upperRect, DT_CENTER | DT_BOTTOM | DT_SINGLELINE);
+                }
+                
+                if (!isWaiting) {
+                    std::string mappedKeyStr = "";
+                    if (g_PadToKey.find(key) != g_PadToKey.end()) {
+                        mappedKeyStr = "[" + VKToStr(g_PadToKey[key]) + "]";
+                    } else {
+                        mappedKeyStr = "[?]";
+                    }
+                    
+                    RECT topCenterRect = padRect;
+                    topCenterRect.top += 5; // offset a bit from top
+                    SetTextColor(memDC, RGB(180, 180, 180));
+                    DrawTextA(memDC, mappedKeyStr.c_str(), -1, &topCenterRect, DT_CENTER | DT_TOP | DT_SINGLELINE);
+                }
+                
+                RECT lowerRect = padRect;
+                lowerRect.top = pad.y + pad.h / 2 + 10;
+                
+                std::string truncFname = isDisabled ? "NONE" : fname;
+                if (truncFname.length() > 12) {
+                    // Truncate long filenames
+                    truncFname = truncFname.substr(0, 10) + "..";
+                }
+                
+                SetTextColor(memDC, isDisabled ? RGB(70, 70, 70) : RGB(150, 150, 150));
+                DrawTextA(memDC, truncFname.c_str(), -1, &lowerRect, DT_CENTER | DT_TOP | DT_SINGLELINE);
             }
 
             // Draw Copyright
