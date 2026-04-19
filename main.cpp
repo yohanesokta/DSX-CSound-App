@@ -5,6 +5,24 @@
 #include <vector>
 #include "AudioEngine.h"
 #include "PresetManager.h"
+#include <thread>
+#include <atomic>
+#include <chrono>
+
+struct RecordEvent {
+    std::string logicKey;
+    DWORD delayBeforeNextMs;
+};
+
+std::vector<RecordEvent> g_RecordedEvents;
+bool g_IsRecordingArmed = false;
+bool g_IsRecording = false;
+std::atomic<bool> g_IsPlaying = false;
+DWORD g_LastEventTime = 0;
+
+HFONT g_hFontTitle = NULL;
+HFONT g_hFontNormal = NULL;
+HFONT g_hFontSmall = NULL;
 
 AudioEngine g_AudioEngine;
 PresetManager g_PresetManager;
@@ -36,7 +54,6 @@ std::string VKToStr(WPARAM vk) {
         case VK_SUBTRACT: return "NUM-"; case VK_MULTIPLY: return "NUM*";
         case VK_DIVIDE: return "NUM/";
         case VK_UP: return "UP"; case VK_DOWN: return "DOWN";
-        case VK_LEFT: return "LEFT"; case VK_RIGHT: return "RIGHT";
         case VK_OEM_1: return ";"; case VK_OEM_PLUS: return "="; 
         case VK_OEM_COMMA: return ","; case VK_OEM_MINUS: return "-"; 
         case VK_OEM_PERIOD: return "."; case VK_OEM_2: return "/"; 
@@ -159,11 +176,153 @@ void PromptWavSelection(HWND hwnd, const std::string& logicKey) {
 }
 
 #define IDM_HELP 1001
+#define IDM_FILE_SAVE_REC 1002
+#define IDM_FILE_LOAD_REC 1003
+
+void SaveRecord(HWND hwnd) {
+    if (g_RecordedEvents.empty()) {
+        MessageBoxA(hwnd, "Belum ada record yang berjalan untuk disimpan!", "Info", MB_OK | MB_ICONWARNING);
+        return;
+    }
+    char filename[MAX_PATH] = "";
+    OPENFILENAMEA ofn;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFilter = "DSX Record\0*.dsxrec\0All Files\0*.*\0";
+    ofn.lpstrFile = filename;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrDefExt = "dsxrec";
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_EXPLORER;
+
+    if (GetSaveFileNameA(&ofn)) {
+        FILE* f = NULL;
+        fopen_s(&f, filename, "w");
+        if (f) {
+            for (const auto& ev : g_RecordedEvents) {
+                fprintf(f, "%s %u\n", ev.logicKey.c_str(), (unsigned)ev.delayBeforeNextMs);
+            }
+            fclose(f);
+            MessageBoxA(hwnd, "Recording berhasil disimpan.", "Success", MB_OK);
+        }
+    }
+}
+
+void LoadRecord(HWND hwnd) {
+    char filename[MAX_PATH] = "";
+    OPENFILENAMEA ofn;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hwnd;
+    ofn.lpstrFilter = "DSX Record\0*.dsxrec\0All Files\0*.*\0";
+    ofn.lpstrFile = filename;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_EXPLORER;
+
+    if (GetOpenFileNameA(&ofn)) {
+        FILE* f = NULL;
+        fopen_s(&f, filename, "r");
+        if (f) {
+            std::vector<RecordEvent> tempEvents;
+            char key[256];
+            unsigned int del;
+            while (fscanf_s(f, "%255s %u", key, (unsigned int)sizeof(key), &del) == 2) {
+                tempEvents.push_back({key, del});
+            }
+            fclose(f);
+            
+            g_IsRecording = false;
+            g_IsRecordingArmed = false;
+            g_IsPlaying = false;
+            g_RecordedEvents = std::move(tempEvents);
+            g_LastEventTime = 0;
+            
+            InvalidateRect(hwnd, NULL, FALSE);
+            MessageBoxA(hwnd, "Recording berhasil diload!\nSilakan tekan ENTER untuk memutar.", "Success", MB_OK | MB_ICONINFORMATION);
+        }
+    }
+}
+
+LRESULT CALLBACK HelpWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+            
+            RECT rect;
+            GetClientRect(hwnd, &rect);
+            
+            HDC memDC = CreateCompatibleDC(hdc);
+            HBITMAP memBitmap = CreateCompatibleBitmap(hdc, rect.right, rect.bottom);
+            HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
+            
+            HBRUSH bgBrush = CreateSolidBrush(RGB(25, 25, 28)); // Dark modern flat
+            FillRect(memDC, &rect, bgBrush);
+            DeleteObject(bgBrush);
+            
+            SetBkMode(memDC, TRANSPARENT);
+            
+            // Draw title
+            SetTextColor(memDC, RGB(255, 200, 100)); // Accent color
+            HFONT titleFont = CreateFontA(28, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, "Segoe UI");
+            HFONT oldFont = (HFONT)SelectObject(memDC, titleFont);
+            
+            RECT titleRect = { 20, 20, rect.right - 20, 60 };
+            DrawTextA(memDC, "DSX Drumb - Panduan Penggunaan", -1, &titleRect, DT_LEFT | DT_TOP);
+            
+            SelectObject(memDC, oldFont);
+            DeleteObject(titleFont);
+            
+            // Draw body text
+            SetTextColor(memDC, RGB(220, 220, 220));
+            HFONT bodyFont = CreateFontA(19, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, "Segoe UI");
+            oldFont = (HFONT)SelectObject(memDC, bodyFont);
+            
+            const char* helpText = 
+                "+ KLIK KIRI PAD: Mengganti file suara WAV\n\n"
+                "+ KLIK KANAN PAD: Bind / Atur tombol keyboard untuk pad tsb.\n\n"
+                "+ PANAH ATAS/BAWAH: Pindah preset layer\n\n"
+                "+ PANAH KIRI/KANAN (+/-): Mengatur Master Volume\n\n"
+                "+ TOMBOL TAB: Standby / Stop Record Sequencer\n"
+                "   -> Tekan TAB, lalu mainkan pad untuk mulai merekam.\n"
+                "   -> Jeda antar pukulan akan terekam sangat presisi.\n\n"
+                "+ TOMBOL ENTER: Play / Stop Looping Sequencer\n\n"
+                "+ KLIK [ ^ atau v ] di Layer List: Pindah urutan slot preset\n\n"
+                "+ KLIK TOMBOL SAVE: Menyimpan preset";
+
+            RECT bodyRect = { 20, 70, rect.right - 20, rect.bottom - 20 };
+            DrawTextA(memDC, helpText, -1, &bodyRect, DT_LEFT | DT_TOP | DT_WORDBREAK);
+            
+            SelectObject(memDC, oldFont);
+            DeleteObject(bodyFont);
+            
+            BitBlt(hdc, 0, 0, rect.right, rect.bottom, memDC, 0, 0, SRCCOPY);
+            
+            SelectObject(memDC, oldBitmap);
+            DeleteObject(memBitmap);
+            DeleteDC(memDC);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+    }
+    return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_CREATE: {
+            g_hFontTitle = CreateFontA(28, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, "Segoe UI");
+            g_hFontNormal = CreateFontA(18, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, "Segoe UI");
+            g_hFontSmall = CreateFontA(14, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, DEFAULT_PITCH, "Segoe UI");
+
             HMENU hMenu = CreateMenu();
+            
+            HMENU hFileMenu = CreatePopupMenu();
+            AppendMenuA(hFileMenu, MF_STRING, IDM_FILE_SAVE_REC, "Save Record...");
+            AppendMenuA(hFileMenu, MF_STRING, IDM_FILE_LOAD_REC, "Load Record...");
+            
+            AppendMenuA(hMenu, MF_POPUP, (UINT_PTR)hFileMenu, "File");
             AppendMenuA(hMenu, MF_STRING, IDM_HELP, "Help");
             SetMenu(hwnd, hMenu);
 
@@ -175,14 +334,17 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 
         case WM_COMMAND: {
             if (LOWORD(wParam) == IDM_HELP) {
-                const char* helpText = "Panduan Penggunaan DSX Drumb:\n\n"
-                                       "1. Klik kiri pad untuk mengatur file suara (WAV).\n"
-                                       "2. Klik kanan pad untuk mengganti tombol keyboard (bind key).\n"
-                                       "3. Tekan sembarang tombol untuk bind, atau klik kanan lagi untuk batal.\n"
-                                       "4. Panah Atas/Bawah pada keyboard untuk pindah preset layer.\n"
-                                       "5. Klik ^ atau v pada Layer list untuk memindah urutan preset.\n"
-                                       "6. Klik tombol SAVE bila ada perubahan yang telah dibuat.\n";
-                MessageBoxA(hwnd, helpText, "Help / Cara Penggunaan", MB_OK | MB_ICONINFORMATION);
+                HWND hHelp = CreateWindowEx(
+                    WS_EX_TOOLWINDOW, "DSX_Help_Class", "Bantuan / Help",
+                    WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+                    CW_USEDEFAULT, CW_USEDEFAULT, 500, 520,
+                    hwnd, NULL, GetModuleHandle(NULL), NULL
+                );
+                ShowWindow(hHelp, SW_SHOW);
+            } else if (LOWORD(wParam) == IDM_FILE_SAVE_REC) {
+                SaveRecord(hwnd);
+            } else if (LOWORD(wParam) == IDM_FILE_LOAD_REC) {
+                LoadRecord(hwnd);
             }
             return 0;
         }
@@ -309,6 +471,23 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     g_AudioEngine.PlaySoundById(soundId);
                     g_PadFlashTime[logicKey] = GetTickCount(); // For GUI flash
                     InvalidateRect(hwnd, NULL, FALSE);
+
+                    if (g_IsRecordingArmed) {
+                        g_IsRecordingArmed = false;
+                        g_IsRecording = true;
+                        g_RecordedEvents.push_back({logicKey, 0});
+                        g_LastEventTime = GetTickCount();
+                    } else if (g_IsRecording) {
+                        DWORD now = GetTickCount();
+                        if (g_RecordedEvents.empty()) {
+                            g_RecordedEvents.push_back({logicKey, 0});
+                            g_LastEventTime = now;
+                        } else {
+                            g_RecordedEvents.back().delayBeforeNextMs = now - g_LastEventTime;
+                            g_RecordedEvents.push_back({logicKey, 0});
+                            g_LastEventTime = now;
+                        }
+                    }
                 }
             } else if (wParam == VK_UP) {
                 int count = g_PresetManager.GetPresetCount();
@@ -331,6 +510,47 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             } else if (wParam == VK_RIGHT || wParam == VK_ADD || wParam == VK_OEM_PLUS) {
                 float v = g_AudioEngine.GetVolume() + 0.05f;
                 g_AudioEngine.SetVolume(v);
+                InvalidateRect(hwnd, NULL, FALSE);
+            } else if (wParam == VK_TAB) {
+                if (!g_IsRecording && !g_IsRecordingArmed) {
+                    g_IsRecordingArmed = true;
+                    g_IsRecording = false;
+                    g_RecordedEvents.clear();
+                    g_LastEventTime = 0;
+                } else if (g_IsRecording || g_IsRecordingArmed) {
+                    g_IsRecordingArmed = false;
+                    g_IsRecording = false;
+                    if (!g_RecordedEvents.empty()) {
+                        // Simpan delay antara pad terakhir ke tombol tab biar tidak langsung loop
+                        DWORD stopDelay = GetTickCount() - g_LastEventTime;
+                        g_RecordedEvents.back().delayBeforeNextMs = stopDelay;
+                    }
+                }
+                InvalidateRect(hwnd, NULL, FALSE);
+            } else if (wParam == VK_RETURN) { // ENTER
+                if (!g_IsPlaying && !g_RecordedEvents.empty()) {
+                    g_IsPlaying = true;
+                    std::thread([](HWND hwndTarget) {
+                        while (g_IsPlaying) {
+                            for (size_t i = 0; i < g_RecordedEvents.size(); ++i) {
+                                if (!g_IsPlaying) break;
+                                
+                                auto& ev = g_RecordedEvents[i];
+                                std::string soundId = g_PresetManager.GetSoundIdForLogicalKey(ev.logicKey);
+                                if (!soundId.empty()) {
+                                    g_AudioEngine.PlaySoundById(soundId);
+                                    g_PadFlashTime[ev.logicKey] = GetTickCount(); 
+                                }
+                                
+                                if (ev.delayBeforeNextMs > 0) {
+                                    std::this_thread::sleep_for(std::chrono::milliseconds(ev.delayBeforeNextMs));
+                                }
+                            }
+                        }
+                    }, hwnd).detach();
+                } else if (g_IsPlaying) {
+                    g_IsPlaying = false;
+                }
                 InvalidateRect(hwnd, NULL, FALSE);
             }
             return 0;
@@ -357,11 +577,26 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             // Draw Title
             SetBkMode(memDC, TRANSPARENT);
             SetTextColor(memDC, RGB(255, 255, 255));
+            HFONT oldFont = (HFONT)SelectObject(memDC, g_hFontTitle);
+            
             std::string title = "DSX Drumb - " + g_PresetManager.GetCurrentPresetName();
             if (g_PresetManager.IsCurrentPresetEdited()) {
                 title += " [EDITED]";
             }
             TextOutA(memDC, 20, 10, title.c_str(), title.length());
+            
+            SelectObject(memDC, g_hFontNormal); // Use normal smooth font for body
+            
+            if (g_IsRecordingArmed) {
+                SetTextColor(memDC, RGB(255, 150, 50)); // Orange
+                TextOutA(memDC, 450, 10, "* STANDBY...", 12);
+            } else if (g_IsRecording) {
+                SetTextColor(memDC, RGB(255, 50, 50)); // Red
+                TextOutA(memDC, 450, 10, "* RECORDING...", 14);
+            } else if (g_IsPlaying) {
+                SetTextColor(memDC, RGB(50, 255, 50)); // Green
+                TextOutA(memDC, 450, 10, "> PLAYING LOOP", 14);
+            }
             
             std::string subtitle = "Up/Down=Preset, Left/Right=+/- Vol, Click=Set Sound";
             TextOutA(memDC, 20, 35, subtitle.c_str(), subtitle.length());
@@ -430,7 +665,11 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                 // Down Button
                 RECT downBtn = { layerStartX + 195, y, layerStartX + 215, y + layerItemHeight - 4 };
                 FillRect(memDC, &downBtn, btnBrush);
+                
+                SelectObject(memDC, g_hFontSmall); 
                 DrawTextA(memDC, "v", -1, &downBtn, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                SelectObject(memDC, g_hFontNormal);
+                
                 DeleteObject(btnBrush);
             }
 
@@ -522,19 +761,22 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     truncFname = truncFname.substr(0, 10) + "..";
                 }
                 
+                SelectObject(memDC, g_hFontSmall);
                 SetTextColor(memDC, isDisabled ? RGB(80, 80, 80) : RGB(150, 150, 150));
                 DrawTextA(memDC, truncFname.c_str(), -1, &lowerRect, DT_CENTER | DT_TOP | DT_SINGLELINE);
+                SelectObject(memDC, g_hFontNormal);
             }
 
             // Draw Copyright
             SetTextColor(memDC, RGB(100, 100, 100));
-            std::string copyright = "Copyright C 2026 Yohanes Oktanio. All rights reserved.";
-            RECT copyRect = { 20, 515, 630, 545 };
+            std::string copyright = "Copyright \u00A9 2026 Yohanes Oktanio. Built with passion.";
+            RECT copyRect = { 20, 550, 630, 580 };
             DrawTextA(memDC, copyright.c_str(), -1, &copyRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
             // Blit to screen
             BitBlt(hdc, 0, 0, width, height, memDC, 0, 0, SRCCOPY);
 
+            SelectObject(memDC, oldFont);
             SelectObject(memDC, oldBitmap);
             DeleteObject(memBitmap);
             DeleteDC(memDC);
@@ -543,6 +785,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             return 0;
         }
         case WM_DESTROY:
+            if (g_hFontTitle) DeleteObject(g_hFontTitle);
+            if (g_hFontNormal) DeleteObject(g_hFontNormal);
+            if (g_hFontSmall) DeleteObject(g_hFontSmall);
             PostQuitMessage(0);
             return 0;
     }
@@ -570,10 +815,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     RegisterClass(&wc);
 
+    WNDCLASS wcHelp = { };
+    wcHelp.lpfnWndProc = HelpWindowProc;
+    wcHelp.hInstance = hInstance;
+    wcHelp.lpszClassName = "DSX_Help_Class";
+    wcHelp.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wcHelp.hbrBackground = CreateSolidBrush(RGB(25, 25, 28));
+    RegisterClass(&wcHelp);
+
     HWND hwnd = CreateWindowEx(
         0, CLASS_NAME, "DSX Drumb",
         WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX, // disable resize
-        CW_USEDEFAULT, CW_USEDEFAULT, 650, 600,
+        CW_USEDEFAULT, CW_USEDEFAULT, 650, 650,
         NULL, NULL, hInstance, NULL
     );
 

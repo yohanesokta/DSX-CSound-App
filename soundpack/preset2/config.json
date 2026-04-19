@@ -2,6 +2,10 @@
     "base_path": "./soundpack/preset2/",
     "mapping": {
         "Pad1": "Jaran Tung.wav",
+        "Pad10": "Jaran Tung.wav",
+        "Pad11": "Jaran Plank.wav",
+        "Pad12": "Jaran Jidor.wav",
+        "Pad14": "Jaran Ncess.wav",
         "Pad2": "Jaran Bem.wav",
         "Pad3": "Jaran Tung.wav",
         "Pad4": null,
@@ -9,10 +13,7 @@
         "Pad6": "Jaran Ncess.wav",
         "Pad7": "Jaran Tank.wav",
         "Pad8": "Jaran Dut.wav",
-        "Pad9": "Jaran Bem.wav",
-        "Pad10": "Jaran Tung.wav",
-        "Pad11": "Jaran Plank.wav",
-        "Pad12": "Jaran Jidor.wav"
+        "Pad9": "Jaran Bem.wav"
     },
     "preset_name": "Jandhut"
 }
