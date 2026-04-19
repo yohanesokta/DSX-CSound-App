@@ -22,7 +22,11 @@ public:
     void PlaySoundById(const std::string& id);
     void UnloadAll();
 
+    void SetVolume(float volume);
+    float GetVolume() const;
+
 private:
+    float m_volume = 1.0f;
     Microsoft::WRL::ComPtr<IXAudio2> pXAudio2;
     IXAudio2MasteringVoice* pMasterVoice;
     

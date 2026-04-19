@@ -86,3 +86,16 @@ void AudioEngine::UnloadAll() {
     voicePools.clear();
     sounds.clear();
 }
+
+void AudioEngine::SetVolume(float volume) {
+    if (volume < 0.0f) volume = 0.0f;
+    if (volume > 1.0f) volume = 1.0f;
+    m_volume = volume;
+    if (pMasterVoice) {
+        pMasterVoice->SetVolume(m_volume);
+    }
+}
+
+float AudioEngine::GetVolume() const {
+    return m_volume;
+}

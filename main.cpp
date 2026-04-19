@@ -324,6 +324,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
                     g_PresetManager.LoadPreset(next, g_AudioEngine);
                     InvalidateRect(hwnd, NULL, TRUE);
                 }
+            } else if (wParam == VK_LEFT || wParam == VK_SUBTRACT || wParam == VK_OEM_MINUS) {
+                float v = g_AudioEngine.GetVolume() - 0.05f;
+                g_AudioEngine.SetVolume(v);
+                InvalidateRect(hwnd, NULL, FALSE);
+            } else if (wParam == VK_RIGHT || wParam == VK_ADD || wParam == VK_OEM_PLUS) {
+                float v = g_AudioEngine.GetVolume() + 0.05f;
+                g_AudioEngine.SetVolume(v);
+                InvalidateRect(hwnd, NULL, FALSE);
             }
             return 0;
         }
@@ -355,8 +363,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
             }
             TextOutA(memDC, 20, 10, title.c_str(), title.length());
             
-            std::string subtitle = "Up/Down=Preset, Click Pad=Change Sound";
+            std::string subtitle = "Up/Down=Preset, Left/Right=+/- Vol, Click=Set Sound";
             TextOutA(memDC, 20, 35, subtitle.c_str(), subtitle.length());
+
+            char volText[64];
+            snprintf(volText, sizeof(volText), "Volume: %d%%", (int)(g_AudioEngine.GetVolume() * 100.0f + 0.5f));
+            SetTextColor(memDC, RGB(255, 200, 100)); // Yellowish volume text
+            TextOutA(memDC, 20, 450, volText, strlen(volText));
 
             // Draw Save Button if edited
             if (g_PresetManager.IsCurrentPresetEdited()) {
