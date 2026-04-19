@@ -17,6 +17,19 @@ By utilizing pure Win32 GDI routines for rendering and direct Microsoft XAudio2 
 * **Presets Management**: Layer configurations and keyboard-to-file maps actively synchronized via static lightweight `nlohmann/json`. 
 * **Custom Config Tracking**: Direct integration with hot-swapping pads using pure native `GetOpenFileName` logic.
 
+# Video Documentation
+
+https://github.com/user-attachments/assets/9918f9d2-7c5b-424e-8572-f13b9aaa0b91
+
+# Picture Of DSX Rakitan Ashooy
+
+<img width="1600" height="1063" alt="WhatsApp Image 2026-04-20 at 01 53 38" src="https://github.com/user-attachments/assets/540ae889-5f2e-4a5d-bc99-ddafccdcccf6" />
+
+
+
+
+
+
 ## System Requirements
 - **Operating System**: Windows 10/11
 - **Tools**: Visual Studio 2022 (MSVC Toolchain), Windows 10 SDK (for XAudio2 support)
